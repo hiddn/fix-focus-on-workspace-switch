@@ -1,6 +1,6 @@
 {
   "name": "Fix focus on workspace switch",
-  "description": "When a workspace switch occurs, this extension ensures the focus is on a window located on the new workspace.",
+  "description": "When a workspace switch occurs, this extension ensures the focus is on a window located on the new workspace.\n\nThis extension is essential for a multi-monitor setup using multiple workspaces",
   "uuid": "fix-focus-on-workspace-switch@hiddn.github.com",
   "shell-version": [
     "40", "41", "42", "43", "44"

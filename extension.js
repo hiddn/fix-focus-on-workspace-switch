@@ -35,7 +35,7 @@ SOFTWARE.
 
 'use strict';
 
-const __DEBUG__ = false;
+const __DEBUG__ = true;
 let sourceId = null;
 
 const GLib = imports.gi.GLib;
@@ -88,6 +88,7 @@ function _setFocus() {
     const workspace = global.workspace_manager.get_active_workspace();
     const windowList = workspace.list_windows();
 
+    let foundWindow = false;
     const display = global.display;
     const windowList2 = display.sort_windows_by_stacking(windowList);
     for (let i = windowList2.length - 1; i >= 0; i--) {
@@ -109,7 +110,11 @@ function _setFocus() {
         
         // A delay is required here, otherwise focus is not properly applied to the window
         sourceId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => (window.activate(global.get_current_time())));
+        foundWindow = true;
         break;
+    }
+    if (!foundWindow) {
+        sourceId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => (workspace.get_display().focus_default_window(global.get_current_time())));
     }
 }
 
