@@ -37,6 +37,7 @@ SOFTWARE.
 
 const __DEBUG__ = false;
 let sourceIds = [];
+let _workspaceSwitchedSignal = null;
 
 const GLib = imports.gi.GLib;
 
@@ -46,14 +47,14 @@ function init() {
 }
 
 function enable() {
-    global.workspace_manager.connect('workspace-switched', _setFocus);
+    _workspaceSwitchedSignal = global.workspace_manager.connect('workspace-switched', _setFocus);
     if (__DEBUG__) {
         log(`WorkspaceFocus enabled`)
     }
 }
 
 function disable() {
-    global.workspace_manager.disconnect(_setFocus);
+    global.workspace_manager.disconnect(_workspaceSwitchedSignal);
     if (sourceIds.length > 0) {
         for (sid in sourceIds) {
             GLib.Source.remove(sid);
