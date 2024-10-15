@@ -39,7 +39,8 @@ import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 import GLib from 'gi://GLib';
 
 const __DEBUG__ = false;
-let sourceIds = [];
+const FOCUS_DELAY_MS = 100; // Delay in milliseconds
+let debounceTimeout = null;
 
 export default class WorkspaceFocusExtension extends Extension {
     enable() {
@@ -50,13 +51,9 @@ export default class WorkspaceFocusExtension extends Extension {
     }
 
     disable() {
-        let sid = null;
         global.workspace_manager.disconnect(this._workspaceSwitchedSignal);
-        if (sourceIds.length > 0) {
-            for (sid in sourceIds) {
-                GLib.Source.remove(sid);
-            }
-            sourceIds = [];
+        if (debounceTimeout) {
+            GLib.Source.remove(debounceTimeout);  // Clear the previous timeout
         }
         if (__DEBUG__) {
             console.log(`WorkspaceFocus disabled`)
@@ -91,6 +88,7 @@ function _setFocus() {
 
     const display = global.display;
     const windowList2 = display.sort_windows_by_stacking(windowList);
+
     for (let i = windowList2.length - 1; i >= 0; i--) {
         let window = windowList2[i];
         if (window.minimized || isWindowInNonWorkspace(window)) {
@@ -110,14 +108,14 @@ function _setFocus() {
         }
         
         // A delay is required here, otherwise focus is not properly applied to the window
-        let sid = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
+        if (debounceTimeout) {
+            GLib.Source.remove(debounceTimeout);  // Clear the previous timeout
+        }
+        debounceTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, FOCUS_DELAY_MS, () => {
             window.activate(global.get_current_time());
-            if (sourceIds.length > 0) {
-                GLib.Source.remove(sourceIds.shift());
-            }
+            debounceTimeout = null;  // Clear the reference
             return false;
         });
-        sourceIds.push(sid)
         break;
     }
 }
