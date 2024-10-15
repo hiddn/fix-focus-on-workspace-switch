@@ -36,7 +36,8 @@ SOFTWARE.
 'use strict';
 
 const __DEBUG__ = false;
-let sourceIds = [];
+const FOCUS_DELAY_MS = 100; // Delay in milliseconds
+let debounceTimeout = null;
 let _workspaceSwitchedSignal = null;
 
 const GLib = imports.gi.GLib;
@@ -55,11 +56,8 @@ function enable() {
 
 function disable() {
     global.workspace_manager.disconnect(_workspaceSwitchedSignal);
-    if (sourceIds.length > 0) {
-        for (sid in sourceIds) {
-            GLib.Source.remove(sid);
-        }
-        sourceIds = [];
+    if (debounceTimeout) {
+        GLib.Source.remove(debounceTimeout);  // Clear the previous timeout
     }
     if (__DEBUG__) {
         log(`WorkspaceFocus disabled`)
@@ -111,16 +109,16 @@ function _setFocus() {
             const timestamp = GLib.DateTime.new_now_local().format('%Y-%m-%d %H:%M:%S');
             log(`[${timestamp}] Most recent window: [${workspace.index()}] ${window.get_id()} - ${windowTitle}`);
         }
-        
+
         // A delay is required here, otherwise focus is not properly applied to the window
-        let sid = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
+        if (debounceTimeout) {
+            GLib.Source.remove(debounceTimeout);  // Clear the previous timeout
+        }
+        debounceTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, FOCUS_DELAY_MS, () => {
             window.activate(global.get_current_time());
-            if (sourceIds.length > 0) {
-                GLib.Source.remove(sourceIds.shift());
-            }
+            debounceTimeout = null;  // Clear the reference
             return false;
         });
-        sourceIds.push(sid)
         break;
     }
 }
