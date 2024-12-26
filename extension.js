@@ -37,10 +37,12 @@ SOFTWARE.
 
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 import GLib from 'gi://GLib';
+import overview from 'resource:///org/gnome/shell/ui/main.js';
+
 
 const __DEBUG__ = false;
 const FOCUS_DELAY_MS = 100; // Delay in milliseconds
-let debounceTimeout = null;
+let idleFocusHandler = null;
 
 export default class WorkspaceFocusExtension extends Extension {
     enable() {
@@ -52,8 +54,8 @@ export default class WorkspaceFocusExtension extends Extension {
 
     disable() {
         global.workspace_manager.disconnect(this._workspaceSwitchedSignal);
-        if (debounceTimeout) {
-            GLib.Source.remove(debounceTimeout);  // Clear the previous timeout
+        if (idleFocusHandler) {
+            GLib.Source.remove(idleFocusHandler);  // Clear the previous idle focus handler
         }
         if (__DEBUG__) {
             console.log(`WorkspaceFocus disabled`)
@@ -94,27 +96,38 @@ function _setFocus() {
         if (window.minimized || isWindowInNonWorkspace(window)) {
             continue;
         }
+
         if (__DEBUG__) {
             let windowTitle = "";
-            // Get the window actor for the given window
             const windowActor = global.get_window_actors().find(actor => actor.metaWindow === window);
-
             if (windowActor) {
-                // Get the window title from the window actor
                 windowTitle = windowActor.get_meta_window().get_title();
             }
             const timestamp = GLib.DateTime.new_now_local().format('%Y-%m-%d %H:%M:%S');
             console.debug(`[${timestamp}] Most recent window: [${workspace.index()}] ${window.get_id()} - ${windowTitle}`);
         }
-        
-        // A delay is required here, otherwise focus is not properly applied to the window
-        if (debounceTimeout) {
-            GLib.Source.remove(debounceTimeout);  // Clear the previous timeout
+
+        // Clear any existing idle focus handler
+        if (idleFocusHandler) {
+            GLib.Source.remove(idleFocusHandler);
         }
-        debounceTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, FOCUS_DELAY_MS, () => {
+
+        // Wait for ongoing animations to complete before focusing
+        idleFocusHandler = GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+            if (overview.animation_in_progress) {
+                if (__DEBUG__) {
+                    console.debug(`Animation in progress, waiting...`);
+                }
+                return true; // Keep waiting
+            }
+
+            if (__DEBUG__) {
+                console.debug(`Animation finished, activating window.`);
+            }
+
             window.activate(global.get_current_time());
-            debounceTimeout = null;  // Clear the reference
-            return false;
+            idleFocusHandler = null; // Clear the reference
+            return false; // Stop the idle handler
         });
         break;
     }
