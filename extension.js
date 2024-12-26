@@ -36,11 +36,11 @@ SOFTWARE.
 'use strict';
 
 const __DEBUG__ = false;
-const FOCUS_DELAY_MS = 100; // Delay in milliseconds
-let debounceTimeout = null;
+let idleFocusHandler = null;
 let _workspaceSwitchedSignal = null;
 
 const GLib = imports.gi.GLib;
+const Main = imports.ui.main;
 
 
 function init() {
@@ -50,19 +50,22 @@ function init() {
 function enable() {
     _workspaceSwitchedSignal = global.workspace_manager.connect('workspace-switched', _setFocus);
     if (__DEBUG__) {
-        log(`WorkspaceFocus enabled`)
+        log(`fix-focus-on-workspace-switch enabled`)
     }
 }
 
 function disable() {
-    global.workspace_manager.disconnect(_workspaceSwitchedSignal);
-    if (debounceTimeout) {
-        GLib.Source.remove(debounceTimeout);  // Clear the previous timeout
+    if (_workspaceSwitchedSignal) {
+        global.workspace_manager.disconnect(_workspaceSwitchedSignal);
+        _workspaceSwitchedSignal = null; // Prevent double disconnection
+    }
+    if (idleFocusHandler) {
+        GLib.Source.remove(idleFocusHandler);
+        idleFocusHandler = null; // Clear the reference
     }
     if (__DEBUG__) {
-        log(`WorkspaceFocus disabled`)
+        log(`fix-focus-on-workspace-switch disabled`)
     }
-
 }
 
 function isWindowInNonWorkspace(window) {
@@ -92,32 +95,44 @@ function _setFocus() {
 
     const display = global.display;
     const windowList2 = display.sort_windows_by_stacking(windowList);
+
     for (let i = windowList2.length - 1; i >= 0; i--) {
         let window = windowList2[i];
         if (window.minimized || isWindowInNonWorkspace(window)) {
             continue;
         }
+
         if (__DEBUG__) {
             let windowTitle = "";
-            // Get the window actor for the given window
             const windowActor = global.get_window_actors().find(actor => actor.metaWindow === window);
-
             if (windowActor) {
-                // Get the window title from the window actor
                 windowTitle = windowActor.get_meta_window().get_title();
             }
             const timestamp = GLib.DateTime.new_now_local().format('%Y-%m-%d %H:%M:%S');
             log(`[${timestamp}] Most recent window: [${workspace.index()}] ${window.get_id()} - ${windowTitle}`);
         }
 
-        // A delay is required here, otherwise focus is not properly applied to the window
-        if (debounceTimeout) {
-            GLib.Source.remove(debounceTimeout);  // Clear the previous timeout
+        // Clear any existing idle focus handler
+        if (idleFocusHandler) {
+            GLib.Source.remove(idleFocusHandler);
         }
-        debounceTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, FOCUS_DELAY_MS, () => {
+
+        // Wait for ongoing animations to complete before focusing
+        idleFocusHandler = GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+            if (Main.overview.animation_in_progress) {
+                if (__DEBUG__) {
+                    log(`Animation in progress, waiting...`);
+                }
+                return true; // Keep waiting
+            }
+
+            if (__DEBUG__) {
+                log(`Animation finished, activating window.`);
+            }
+
             window.activate(global.get_current_time());
-            debounceTimeout = null;  // Clear the reference
-            return false;
+            idleFocusHandler = null; // Clear the reference
+            return false; // Stop the idle handler
         });
         break;
     }
