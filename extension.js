@@ -37,7 +37,7 @@ SOFTWARE.
 
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 import GLib from 'gi://GLib';
-import overview from 'resource:///org/gnome/shell/ui/main.js';
+import {overview} from 'resource:///org/gnome/shell/ui/main.js';
 
 
 const __DEBUG__ = false;
